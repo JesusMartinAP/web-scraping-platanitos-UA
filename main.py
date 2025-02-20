@@ -28,27 +28,27 @@ def main(page: ft.Page):
         try:
             # Configurar opciones de Chrome
             options = webdriver.ChromeOptions()
-            # Para ver la ejecución, descomenta la siguiente línea (sin headless)
-            # options.add_argument("--headless")
+            # Para ver la ejecución y que la ventana se maximice, NO usamos headless
+            # options.add_argument("--headless")  # Comentado para ver la ventana
             options.add_argument("--disable-gpu")
             options.add_argument("--no-sandbox")
             options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--remote-debugging-port=9222")
-
-            # Inicializar el servicio usando webdriver_manager (descarga el driver automáticamente)
+            # Inicializar el Service con webdriver_manager
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=options)
+            
+            # Maximizar la ventana para que se extienda completamente
+            driver.maximize_window()
 
             # URL principal a scrapear
             url = "https://platanitos.com/pe/productos?filter_brand[]=Under+Armour&sort=timestamp_active_unix+desc"
             driver.get(url)
 
-            # Esperar a que se cargue el listado de productos
+            # Esperar a que se carguen los productos
             WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "productoItem"))
             )
 
-            # Encontrar todos los elementos que representan un producto
             product_cards = driver.find_elements(By.CLASS_NAME, "productoItem")
             if not product_cards:
                 result_text.value = "No se encontraron productos en la página."
@@ -71,33 +71,53 @@ def main(page: ft.Page):
                     driver.switch_to.window(driver.window_handles[1])
                     driver.get(product_link)
 
-                    # Esperar a que se cargue el título (elemento <h1>) del producto
+                    # Esperar a que se cargue el título (<h1>)
                     WebDriverWait(driver, 10).until(
                         EC.presence_of_element_located((By.TAG_NAME, "h1"))
                     )
 
-                    # Extraer la información indicada:
-                    marca = driver.find_element(By.CSS_SELECTOR, 'a[href*="/marca/"]').text.strip()
+                    # Extraer el nombre del producto
                     nombre = driver.find_element(By.TAG_NAME, "h1").text.strip()
-                    # Se extrae el modelo a partir de un elemento que contenga "MPN:"; se espera que el texto tenga el formato "MPN: <valor>"
-                    modelo_text = driver.find_element(By.XPATH, '//div[contains(text(), "MPN:")]').text
-                    modelo = modelo_text.split("MPN:")[-1].strip()
-                    descripcion = driver.find_element(By.ID, "description").text.strip()
 
-                    # Agregar los datos del producto a la lista
+                    # Extraer el descuento (si existe)
+                    try:
+                        descuento = driver.find_element(By.CSS_SELECTOR, "span.badge.bg-primary.badge-percentage").text.strip()
+                    except Exception:
+                        descuento = "N/A"
+
+                    # Extraer el precio actual
+                    try:
+                        precio = driver.find_element(By.CSS_SELECTOR, "div.text-left").text.strip()
+                    except Exception:
+                        precio = "N/A"
+
+                    # Extraer el precio anterior (del elemento <del>)
+                    try:
+                        precio_anterior = driver.find_element(By.TAG_NAME, "del").text.strip()
+                    except Exception:
+                        precio_anterior = "N/A"
+
+                    # Extraer el modelo (se asume que aparece en un elemento que contiene "MPN:")
+                    try:
+                        modelo_text = driver.find_element(By.XPATH, '//div[contains(text(), "MPN:")]').text
+                        modelo = modelo_text.split("MPN:")[-1].strip()
+                    except Exception:
+                        modelo = "N/A"
+
+                    # Almacenar los datos del producto
                     productos.append({
-                        'Marca': marca,
-                        'Nombre': nombre,
-                        'Modelo': modelo,
-                        'Descripción': descripcion,
-                        'URL': product_link
+                        "Nombre": nombre,
+                        "Descuento": descuento,
+                        "Precio": precio,
+                        "Precio Anterior": precio_anterior,
+                        "Modelo": modelo,
+                        "URL": product_link
                     })
 
                     # Cerrar la pestaña del producto y volver a la principal
                     driver.close()
                     driver.switch_to.window(driver.window_handles[0])
 
-                    # Actualizar barra de progreso y estado
                     progress_bar.value = (index + 1) / total_products
                     status_text.value = f"Procesando {index + 1}/{total_products} productos..."
                     page.update()
@@ -133,16 +153,12 @@ def main(page: ft.Page):
             page.update()
             logging.error(str(e))
 
-    # Configuración de la interfaz con Flet
+    # Configurar la interfaz con Flet
     page.add(
         ft.Column([
             ft.Icon(name=ft.icons.WEB_STORIES, size=50),
             ft.Text("Scraper Platanitos", size=24, weight="bold"),
-            ft.ElevatedButton(
-                "Iniciar Scraping",
-                icon=ft.icons.DOWNLOAD,
-                on_click=start_scraping
-            ),
+            ft.ElevatedButton("Iniciar Scraping", icon=ft.icons.DOWNLOAD, on_click=start_scraping),
             progress_bar,
             status_text,
             result_text

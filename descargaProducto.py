@@ -1,5 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
+import pandas as pd
+from datetime import datetime
 
 # URL de la página de productos
 url = "https://platanitos.com/pe/productos?filter_brand[]=Under+Armour&sort=timestamp_active_unix+desc"
@@ -27,8 +29,12 @@ if response.status_code == 200:
     # Eliminar duplicados
     product_links = list(set(product_links))
     
-    # Imprimir los enlaces obtenidos
-    for link in product_links:
-        print("URL:", link)
+    # Guardar en un archivo Excel con la fecha y hora actual
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"URLs_Productos_{timestamp}.xlsx"
+    df = pd.DataFrame(product_links, columns=["URLs"])
+    df.to_excel(filename, index=False)
+    
+    print(f"Archivo guardado: {filename}")
 else:
     print("Error al acceder a la página. Código de estado:", response.status_code)
